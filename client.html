@@ -1,0 +1,342 @@
+<html>
+	<head>
+		<link rel="stylesheet" href="http://code.jquery.com/mobile/1.2.0/jquery.mobile-1.2.0.min.css" />
+		<style>
+		.playernames {text-align:center};	
+		</style>
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable = no"> 
+		<script src="http://code.jquery.com/jquery-1.8.2.min.js"></script>
+		<script src="http://code.jquery.com/mobile/1.2.0/jquery.mobile-1.2.0.min.js"></script>
+		<script src="http://cloud.dbeta.com:30001/socket.io/socket.io.js"></script>
+		<script>
+			var socket;
+			var counter = 0;
+			var stats = new Array(new Array());
+			var stats = [[0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0]];
+			var players = 0;
+			var online = 0;
+			function updateRequest(){
+				socket.emit('updaterequest');
+			}
+			function msgReceived(type, val, newplayers){
+				console.log(type + ": " + val);
+				if(type == "clients"){
+					document.getElementById("client_count").innerHTML=val;
+				} else if (type == "stats"){
+					stats=val;
+					players=newplayers;
+					displayPlayers();
+				}
+			}
+			function statsUpdate(player, stat, val){
+				if(stats[player][stat]+val>=0){
+					if(stat == 1 && stats[player][stat]+val>9){
+						//win condition//
+						console.log(stats[player][2] + " won!");
+					} else if (stat == 1 && stats[player][stat]+val<1){
+						console.log(stats[player][2] + " can't go below level 1")
+					} else {
+						stats[player][stat]+=val;
+						if(online){
+							socket.emit("setstats", stats);
+						}
+						$("#p" + player + "-" + stat).text(stats[player][stat]);
+						displayStats();
+					}
+				}
+			}
+			function createSocket(){
+				online = 1;
+				$('#roomname').text("Online");
+				$("#activeusers").show();
+				if(!socket) {
+					socket = io.connect('http://cloud.dbeta.com:30001');
+				} else {
+					socket.socket.connect();
+				}
+				socket.on('news', function (data) {
+					console.log(data); 
+					socket.emit('my other event', { my: 'data' });
+				socket.on('clients', function(msg){msgReceived('clients', msg)});
+				socket.on('stats', function(msg, newplayers){msgReceived('stats', msg, newplayers)});
+				updateRequest();
+				$.mobile.changePage("#two");
+				});
+				
+				console.log("Log is working!");
+			};
+			function addPlayer(){
+				if(players<10){
+					players += 1;
+					playername = document.getElementById("newUsername").value;
+					console.log(playername);
+					stats[players]=[0,1, playername];
+					displayPlayers();
+					if(online){
+						socket.emit("setplayers", players);
+						socket.emit("setstats", stats);
+					}
+				} else {
+					console.log("Slow down there buddy, I don't think you have more than 10 friends");
+				};
+			};
+			function removePlayer(){
+				if(players>0) {
+					stats[players]=[0,0,0];
+					players -= 1;
+					displayPlayers(players);
+					if(online){
+						socket.emit("setplayers", players);
+					}
+				} else {
+					console.log("No more players to remove");
+				}
+			};
+			function displayPlayers(){
+				for(var i=1; i<=10; i++){
+					if(i<=players){
+						$('#Player' + i).show()
+						console.log("Show #Player" + i);
+					} else {
+						$('#Player' + i).hide();
+						console.log("Hide #Player" + i);
+					}
+				}
+				displayStats();
+			}
+			function displayStats() {
+				for(var a=1; a<=players;a++){
+					if(a<=players){
+						for(var i=0; i<stats[a].length;i++){
+							$("#p" + a + "-" + i).text(stats[a][i]);
+						}
+						$("#p" + a + "total").text(stats[a][0]+stats[a][1]);
+					}
+				}
+			}
+			function reset() {
+				players = 0;
+				stats = new Array(new Array());
+				if(online){
+					socket.emit("setplayers", players);
+					socket.emit("setstats", stats);
+				}
+				displayPlayers();
+			}
+			function closeSocket(){
+				online=0;
+				if(socket){
+					socket.disconnect();
+				}
+				$.mobile.changePage("#one");
+				reset()
+			}
+			function readyOffline(){
+				$("#activeusers").hide()
+				online=0;
+				$.mobile.changePage("#two");
+				$('#roomname').text("Offline");
+			}
+		</script>
+	</head>
+	<body onload=displayPlayers()>
+		<div data-role="page" id="one" data-theme='a'>
+			<div data-role="content">
+				<span data-role="controlgroup">
+					<a href='#' id='offline' data-role='button' data-theme='c' onclick=readyOffline()>Offline</a>
+					<a href='#' id='online' data-role='button' data-theme='b' onclick=createSocket()>Online</a>
+				</span>
+			</div>
+		</div>
+		<div data-role="page" id="two" data-theme='a'>
+			<div data-role="header" id="roomname" data-theme='b'>Offline</div>
+			<div id="admin" data-role="collapsible" data-theme="a" data-content-theme="a">
+				<h3>Admin Panel</h3>
+				<div id="activeusers">Active Users: <span id="client_count">0</span><br></div>
+				<a href='#one' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick="closeSocket()">Disconnect</a><br>
+				<a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick="addPlayer()">Add Player</a><a href='#' data-role='button' data-theme='b' data-inline='true' data-mini='true' onclick="removePlayer()">Remove Player</a><a href='#' data-role='button' data-theme='e' data-inline='true' data-mini='true' onclick="reset()">Reset</a><br>
+				<input type='text' id='newUsername' value='Player' />
+			</div>			
+			<div id="Player1">
+				<div id='p1-2' data-theme="b" data-role="header" class="playernames">Player 1</div>
+				<div data-theme="b" data-role="content">
+					G=
+					<span id='p1-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(1,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(1,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p1-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(1,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(1,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p1total'>0</span>
+				</div>
+			</div>
+			<div id="Player2">
+				<div id='p2-2' data-theme="b" data-role="header" class="playernames">Player 2</div>
+				<div data-theme="c" data-role="content">
+					G=
+					<span id='p2-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(2,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(2,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p2-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(2,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(2,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p2total'>0</span>
+				</div>
+			</div>
+			<div id="Player3">
+				<div id='p3-2' data-theme="b" data-role="header" class="playernames">Player 3</div>
+				<div data-theme="b" data-role="content">
+					G=
+					<span id='p3-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(3,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(3,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p3-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(3,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(3,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p3total'>0</span>
+				</div>
+			</div>
+			<div id="Player4">
+				<div id='p4-2' data-theme="b" data-role="header" class="playernames">Player 4</div>
+				<div data-theme="c" data-role="content">
+					G=
+					<span id='p4-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(4,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(4,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p4-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(4,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(4,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p4total'>0</span>
+				</div>
+			</div>
+			<div id="Player5">
+				<div id='p5-2' data-theme="b" data-role="header" class="playernames">Player 5</div>
+				<div data-theme="b" data-role="content">
+					G=
+					<span id='p5-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(5,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(5,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p5-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(5,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(5,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p5total'>0</span>
+				</div>
+			</div>
+			<div id="Player6">
+				<div id='p6-2' data-theme="b" data-role="header" class="playernames">Player 6</div>
+				<div data-theme="c" data-role="content">
+					G=
+					<span id='p6-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(6,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(6,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p6-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(6,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(6,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p6total'>0</span>
+				</div>
+			</div>
+			<div id="Player7">
+				<div id='p7-2' data-theme="b" data-role="header" class="playernames">Player 7</div>
+				<div data-theme="b" data-role="content">
+					G=
+					<span id='p7-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(7,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(7,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p7-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(7,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(7,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p7total'>0</span>
+				</div>
+			</div>
+			<div id="Player8">
+				<div id='p8-2' data-theme="b" data-role="header" class="playernames">Player 8</div>
+				<div data-theme="c" data-role="content">
+					G=
+					<span id='p8-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(8,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(8,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p8-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(8,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(8,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p8total'>0</span>
+				</div>
+			</div>
+			<div id="Player9">
+				<div id='p9-2' data-theme="b" data-role="header" class="playernames">Player 9</div>
+				<div data-theme="b" data-role="content">
+					G=
+					<span id='p9-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(9,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(9,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p9-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(9,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(9,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p9total'>0</span>
+				</div>
+			</div>
+			<div id="Player10">
+				<div id='p10-2' data-theme="b" data-role="header" class="playernames">Player 10</div>
+				<div data-theme="c" data-role="content">
+					G=
+					<span id='p10-0'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(10,0,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(10,0,+1)>+</a></span>
+					</span>
+					Lvl=
+					<span id='p10-1'>0</span>
+					<span data-role="controlgroup" data-type="horizontal">
+						<span class='minus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(10,1,-1)>-</a></span>
+						<span class='plus'><a href='#' data-role='button' data-theme='a' data-inline='true' data-mini='true' onclick=statsUpdate(10,1,+1)>+</a></span>
+					</span>
+					Total=<span id='p10total'>0</span>
+				</div>
+			</div>
+		</div>
+		</body>
+</html>
