@@ -1,5 +1,18 @@
-var server = require("./server");
 var socket = require("./socket");
-var router = require("./router");
-server.start(30000,router.route)
-socket.start(30001)
+var http = require("http");
+var express = require("express");
+var app = express();
+
+
+var server = http.createServer(app);
+
+
+
+app.get('/*.(js|css|html)', function(req, res){
+  res.sendfile("./public"+req.url);
+});
+
+
+socket.start(server)
+
+server.listen(3000)
