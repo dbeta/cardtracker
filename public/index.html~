@@ -7,7 +7,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable = no"> 
 		<script src="http://code.jquery.com/jquery-1.8.2.min.js"></script>
 		<script src="http://code.jquery.com/mobile/1.2.0/jquery.mobile-1.2.0.min.js"></script>
-		<script src="http://localhost:3000/socket.io/socket.io.js"></script>
+		<script src="http://cloud.dbeta.com:3000/socket.io/socket.io.js"></script>
 		<script>
 			var socket;
 			var counter = 0;
@@ -52,7 +52,7 @@
 				online = 1;
 				$("#activeusers").show();
 				if(!socket) {
-					socket = io.connect('http://localhost:3000');
+					socket = io.connect('http://cloud.dbeta.com:3000');
 				} else {
 					socket.socket.connect();
 				}
@@ -104,12 +104,13 @@
 			};
 			function removePlayer(){
 				if(players>0) {
-					stats[players]=[0,0,0];
 					players -= 1;
-					displayPlayers(players);
 					if(online){
-						socket.emit("removePlayer", stats[players+1][2]);
+						console.log(stats[stats.length][2] + " removed");
+						socket.emit("removePlayer", stats[stats.length][2]);
 					}
+					displayPlayers(players);
+					stats[players]=[0,0,0];
 				} else {
 					console.log("No more players to remove");
 				}

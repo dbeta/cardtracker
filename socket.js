@@ -17,18 +17,16 @@ function socketConnect(socket){
 	activeSockets[socket.id] = socket;
 	socket.room = 0;
 	socket.on('disconnect', function() {socketDisconnect(socket)});
-	socket.on('removePlayer', function(pname) {socket.room.removePlayer(pname)});
-	socket.on('addPlayer', function(pname, gender) {socket.room.addPlayer(pname, gender)});
-	socket.on('addStat', function(pname, stat, val) {socket.room.addStat(pname, stat, val); socket.room.updateSockets(socket, 1);});
+	socket.on('removePlayer', function(pname) {if(socket.room && pname){socket.room.removePlayer(pname)}});
+	socket.on('addPlayer', function(pname, gender) {if(socket.room && pname){socket.room.addPlayer(pname, gender)}});
+	socket.on('addStat', function(pname, stat, val) {if(socket.room && pname){socket.room.addStat(pname, stat, val); socket.room.updateSockets(socket, 1);}});
 	socket.on('joinRoom', function(rname, password) {joinRoom(socket, rname, password);});
 	console.log("New client. Total: " + aaSize(activeSockets));
-	socket.broadcast.emit("clients", aaSize(activeSockets));
 	
 }
 
 function socketDisconnect(socket){
 	delete activeSockets[socket.id];
-	socket.broadcast.emit("clients", aaSize(activeSockets));
 	if(socket.room){
 		socket.room.roomLeave(socket);
 	}
@@ -36,16 +34,20 @@ function socketDisconnect(socket){
 }
 
 function joinRoom(socket, rname, password){
-	if(rooms[rname]){
-		if(rooms[rname].password == password){
-			rooms[rname].roomJoin(socket);
+	if(rname && rname.length < 30){
+		if(rooms[rname]){
+			if(rooms[rname].password == password){
+				rooms[rname].roomJoin(socket);
+			} else {
+				socket.emit("alert", "Invalid Password");
+			}
 		} else {
-			socket.emit("alert", "Invalid Password");
+			newroom = new room(rname, password);
+			rooms[newroom.name] = newroom;
+			rooms[newroom.name].roomJoin(socket)
 		}
 	} else {
-		newroom = new room(rname, password);
-		rooms[newroom.name] = newroom;
-		rooms[newroom.name].roomJoin(socket)
+		socket.emit("alert", "Room name too long or short");
 	}
 }
 
@@ -61,7 +63,6 @@ function room(name, password) {
 	this.password=password;
 	this.players=new Array();
 	console.log("New room " + name);
-	
 	this.updateSockets = function(socket, broadcast) {
 		var statupdate = new Array(new Array());
 		statupdate[0]=[0,1,0]
@@ -72,13 +73,16 @@ function room(name, password) {
 			for(var i in this.sockets) {
 				if(this.sockets[i].id != socket.id) {
 					this.sockets[i].emit("stats", statupdate, this.players.length);
+					this.sockets[i].emit("clients", aaSize(this.sockets));
 				}
 			}
 		} else if(socket && !broadcast){
 			socket.emit("stats", statupdate, this.players.length);
+			socket.emit("clients", aaSize(this.sockets));
 		} else if(broadcast){
 			for(var i in this.sockets) {
 				this.sockets[i].emit("stats", statupdate, this.players.length);
+				this.sockets[i].emit("clients", aaSize(this.sockets));
 			}
 		}
 	}
@@ -96,6 +100,7 @@ function room(name, password) {
 						console.log("Level:" + stat);
 					}
 				}
+				this.updateSockets(0, 1);
 				console.log(this.players[i]);
 				break;
 			}
@@ -115,15 +120,17 @@ function room(name, password) {
 			if(pname.length <= playernamemax) {
 				this.players.push(new player(pname, gender));
 				console.log(pname + " added to room " + this.name);
+				this.updateSockets(0, 1);
 			}else{
 				console.log("Player name too long")
 			}
 		}
 	}
 	this.removePlayer = function(pname){
-		for(var i = 0; i <this.players.length; i++){
+		for(var i = 0; i < this.players.length; i++){
 			if(this.players[i].name === pname){
 				this.players.splice(i,1);
+				this.updateSockets(0, 1);
 				break;
 			}
 		}
@@ -133,12 +140,13 @@ function room(name, password) {
 		socket.room=this;
 		socket.emit("inRoom", this.name);
 		console.log(this.sockets[socket.id].id +" joined " + this.name + " room, number in room:" + aaSize(this.sockets));
-		this.updateSockets(socket,0);
+		this.updateSockets(0, 1);
 	}
 	this.roomLeave = function(socket){
 		if(this.sockets[socket.id]){
 			delete this.sockets[socket.id];
 			console.log(socket.id + " removed from room " + aaSize(this.sockets) + " remaining");
+			this.updateSockets(0, 1);
 		}
 	}
 }

@@ -1,4 +1,4 @@
 cardtracker
 ===========
 
-A simple card tracker application.
+A simple munchkin card tracker application.
